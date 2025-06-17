@@ -3,16 +3,16 @@
 
 # === DEFAULT PARAMETERS ===
 SEEDS=1
-N="16"
-MODEL="EXP"
+N="16"        #filter orientations
+MODEL="EXP"   #neural network model
 TYPE="regular"
 RESTRICT="0"
-DATASET="mnist_rot"
+DATASET="mnist_rot"  
 J="-1"
 F="None"
 sigma="None"
 SGID=""
-SAMPLES=""  # NEW: limit number of training samples
+SAMPLES=""  # NEW: limit number of training samples, added for reproducing Fig 4 LEFT
 
 FIXPARAMS=0
 DELTAORTH=0
@@ -90,17 +90,33 @@ case $key in
     SAMPLES="$2"    # NEW: parse the --samples argument
     shift; shift
     ;;
+    
+    --test_rotation_angle)  #implementing test and train angle options
+    TEST_ROT_ANGLE="$2"
+    shift; shift
+    ;;
+
+    --train_rotation_angle)
+    TRAIN_ROT_ANGLE="$2"
+    shift; shift
+    ;;
+
     *)
     shift
     ;;
+
 esac
 done
 
 # === BUILD PARAMETER STRING ===
-PARAMS="--dataset=$DATASET --model=$MODEL --type=$TYPE --N=$N --restrict=$RESTRICT --F=$F --sigma=$sigma --interpolation=$INTERPOLATION --epochs=30 --lr=0.001 --batch_size=64 --augment --time_limit=300 --verbose=2 --adapt_lr=exponential --lr_decay_start=10 --reshuffle"
+PARAMS="--dataset=$DATASET --model=$MODEL --type=$TYPE --N=$N --restrict=$RESTRICT --F=$F --sigma=$sigma --interpolation=$INTERPOLATION --epochs=30 --lr=0.001 --batch_size=32 --augment --time_limit=300 --verbose=2 --adapt_lr=exponential --lr_decay_start=10 --reshuffle"
 
 if [ "$SGID" != "" ]; then
     PARAMS="$PARAMS --sgsize=$SGID"
+fi
+
+if [ "$TEST_ROT_ANGLE" != "" ]; then  --for augmentation
+    PARAMS="$PARAMS --test_rotation_angle=$TEST_ROT_ANGLE"
 fi
 
 if [ "$FLIP" -eq "1" ]; then
@@ -129,6 +145,11 @@ fi
 if [ "$SAMPLES" != "" ]; then
     PARAMS="$PARAMS --samples=$SAMPLES"  # NEW: inject into final command
 fi
+
+if [ "$TRAIN_ROT_ANGLE" != "" ]; then
+    PARAMS="$PARAMS --train_rotation_angle=$TRAIN_ROT_ANGLE"
+fi
+
 
 echo $PARAMS
 

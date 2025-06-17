@@ -38,6 +38,11 @@ if __name__ == "__main__":
     ######## NEW: Optional sample limit ########
     parser.add_argument('--samples', type=int, default=None,
                         help='Limit number of training samples used')
+                        
+    ######## NEW: Optional test set rotation ########
+    parser.add_argument('--test_rotation_angle', type=float, default=None,
+                        help='Rotate test set images by this fixed angle (e.g., 45, 90 degrees)')
+
 
     config = parser.parse_args()
     main(config)

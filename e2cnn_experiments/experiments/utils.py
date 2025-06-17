@@ -3,6 +3,7 @@ import sqlite3
 import pandas as pd
 import numpy as np
 import io
+import torch # Newly added
 
 from typing import List
 
@@ -174,11 +175,11 @@ from datasets.STL10 import data_loader_stl10frac
 
 
 def build_dataloaders(dataset, batch_size, num_workers, augment, validation=True, reshuffle=False,
-                      eval_batch_size=None, interpolation=2, limit_samples = None):
+                      eval_batch_size=None, interpolation=2, limit_samples = None, test_rotation_angle=None, train_rotation_angle=None):
     if eval_batch_size is None:
         eval_batch_size = batch_size
         
-    if dataset == "mnist_rot":
+    if dataset == "mnist_rot":  ########## Used for figure 4 Left
         
         if validation:
             if reshuffle:
@@ -190,7 +191,7 @@ def build_dataloaders(dataset, batch_size, num_workers, augment, validation=True
                                                                               rot_interpol_augmentation=augment,
                                                                               interpolation=interpolation,
                                                                               reshuffle_seed=seed,
-                                                                              limit_samples = limit_samples)
+                                                                              limit_samples = limit_samples) #limit samples for trainong
             valid_loader, _, _ = data_loader_mnist_rot.build_mnist_rot_loader("valid",
                                                                               eval_batch_size,
                                                                               rot_interpol_augmentation=False,
@@ -206,7 +207,7 @@ def build_dataloaders(dataset, batch_size, num_workers, augment, validation=True
         
         test_loader, n_inputs, n_outputs = data_loader_mnist_rot.build_mnist_rot_loader("test",
                                                                                         eval_batch_size,
-                                                                                        rot_interpol_augmentation=False)
+                                                                                        rot_interpol_augmentation=False)  
     
     elif dataset == "mnist_fliprot":
         
@@ -237,7 +238,7 @@ def build_dataloaders(dataset, batch_size, num_workers, augment, validation=True
         test_loader, n_inputs, n_outputs = data_loader_mnist_fliprot.build_mnist_rot_loader("test",
                                                                                             eval_batch_size,
                                                                                             rot_interpol_augmentation=False)
-    elif dataset == "mnist12k":
+    elif dataset == "mnist12k":  ########## Used for Figure $ Right
         
         if validation:
             if reshuffle:
@@ -248,7 +249,8 @@ def build_dataloaders(dataset, batch_size, num_workers, augment, validation=True
                                                                             batch_size,
                                                                             rot_interpol_augmentation=augment,
                                                                             interpolation=interpolation,
-                                                                            reshuffle_seed=seed)
+                                                                            reshuffle_seed=seed,
+                                                                            train_rotation_angle=train_rotation_angle  )#### training augmentation
             valid_loader, _, _ = data_loader_mnist12k.build_mnist12k_loader("valid",
                                                                             eval_batch_size,
                                                                             rot_interpol_augmentation=False,
@@ -259,14 +261,52 @@ def build_dataloaders(dataset, batch_size, num_workers, augment, validation=True
                                                                             batch_size,
                                                                             rot_interpol_augmentation=augment,
                                                                             interpolation=interpolation,
-                                                                            reshuffle_seed=None)
+                                                                            reshuffle_seed=None,
+                                                                            train_rotation_angle=train_rotation_angle)
             valid_loader = False
+            
+       
+
         
         test_loader, n_inputs, n_outputs = data_loader_mnist12k.build_mnist12k_loader("test",
                                                                                       eval_batch_size,
-                                                                                      # rot_interpol_augmentation=False
-                                                                                      # interpolation=interpolation,
-                                                                                      )
+                                                                                      #rot_interpol_augmentation=False,
+                                                                                      #interpolation=interpolation,
+                                                                                      test_rotation_angle=test_rotation_angle)  # <- pass test_rotation_angle
+
+                                                                                        
+
+   
+    elif dataset == "mnist":
+        from torchvision.datasets import MNIST
+        from torchvision import transforms
+
+        transform = transforms.ToTensor()
+       ## train_set = MNIST(roo=True, transform=transform, download=True)
+        train_set_full = MNIST(root="./data", train=True, transform=transform, download=True)
+        if limit_samples is not None:
+            indices = torch.randperm(len(train_set_full))[:limit_samples]
+            train_set = Subset(train_set_full, indices)
+        else:
+            train_set = train_set_full
+
+        test_set = MNIST(root="./data", train=False, transform=transform, download=True)
+
+        if validation:
+            val_split = int(0.8 * len(train_set))
+            train_subset, valid_subset = torch.utils.data.random_split(
+                train_set, [val_split, len(train_set) - val_split]
+            )
+            train_loader = torch.utils.data.DataLoader(train_subset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+            valid_loader = torch.utils.data.DataLoader(valid_subset, batch_size=eval_batch_size, shuffle=False, num_workers=num_workers)
+        else:
+            train_loader = torch.utils.data.DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+            valid_loader = False
+
+        test_loader = torch.utils.data.DataLoader(test_set, batch_size=eval_batch_size, shuffle=False, num_workers=num_workers)
+        n_inputs = 1
+        n_outputs = 10
+                                                                                 
     elif dataset == "STL10":
         train_loader, valid_loader, test_loader, n_inputs, n_outputs = data_loader_stl10.build_stl10_loaders(
             batch_size,
@@ -381,7 +421,10 @@ def args_exp_parameters(parser):
     parser.add_argument('--workers', type=int, default=8, help='Number of jobs to load the dataset')
     parser.add_argument('--time_limit', type=int, default=None, help='Maximum time limit for training (in Minutes)')
     parser.add_argument('--verbose', type=int, default=2, help='Verbose Level')
-    
+    parser.add_argument('--train_rotation_angle', type=float, default=None,
+                    help='Apply fixed rotation (degrees) to training images')
+
+
     # Model params
     parser.add_argument('--model', type=str, help='The name of the model to use')
     parser.add_argument('--type', type=str, default=None, help='Type of fiber for the EXP model')

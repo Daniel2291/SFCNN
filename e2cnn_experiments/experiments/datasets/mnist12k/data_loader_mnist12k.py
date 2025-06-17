@@ -4,6 +4,7 @@ import torch
 import torch.utils.data as data
 import os.path
 from torchvision import transforms
+from torchvision.transforms import InterpolationMode
 
 from . import own_transforms
 
@@ -88,7 +89,7 @@ class mnist_dataset(data.Dataset):
 
 
 def build_mnist12k_loader(mode, batch_size, num_workers=8, rot_interpol_augmentation=False, interpolation=0,
-                          reshuffle_seed=None, coords=False):
+                          reshuffle_seed=None, coords=False, test_rotation_angle=None, train_rotation_angle=None):
     """  """
     rng = np.random.RandomState(42)
 
@@ -102,13 +103,43 @@ def build_mnist12k_loader(mode, batch_size, num_workers=8, rot_interpol_augmenta
         
         shuffle = False
         drop_last = False
-        transform = [own_transforms.GrayToTensor()]
+        ######## If a test_rotation_angle is provided, apply that rotation to test images
+        if test_rotation_angle is not None:
+            transform = [
+                transforms.Lambda(lambda img: img.rotate(test_rotation_angle)),
+                own_transforms.GrayToTensor()
+            ]
+        else:
+            transform = [own_transforms.GrayToTensor()]
     elif mode in ['train', 'trainval']:
         shuffle = True
         drop_last = True
-        if rot_interpol_augmentation:
+        if train_rotation_angle is not None:
+
+            class RandomMultipleRotation:
+                def __init__(self, angle_step):
+                    self.angles = list(range(0, 360, int(round(angle_step))))
+
+
+                def __call__(self, img):
+                    angle = np.random.choice(self.angles)
+                    return img.rotate(angle)
+                    
             transform = [
-                transforms.RandomRotation(5, resample=interpolation),
+                RandomMultipleRotation(train_rotation_angle),
+                own_transforms.GrayToTensor()
+            ]
+        elif rot_interpol_augmentation:  ###
+            interpolation_map = {
+               0: InterpolationMode.NEAREST,
+               2: InterpolationMode.BILINEAR,
+               3: InterpolationMode.BICUBIC
+            }
+            interp_mode = interpolation_map[interpolation]
+
+            
+            transform = [
+                transforms.RandomRotation(5, interpolation=interp_mode),    ##resample-> interpolation,
                 own_transforms.GrayToTensor(),
             ]
         else:

@@ -61,6 +61,7 @@ class mnist_rot_dataset(data.Dataset):
         self.images = data['images'].astype(np.float32)
         self.labels = data['labels'].astype(np.int64)
         self.num_samples = len(self.labels)
+        ##self.fixed_angle = fixed_angle
     
     def __getitem__(self, index):
         """
@@ -72,6 +73,8 @@ class mnist_rot_dataset(data.Dataset):
         image, label = self.images[index], self.labels[index]
         # convert to PIL Image
         image = Image.fromarray(image)
+
+        
         # transform images and labels
         if self.transform is not None:
             self.transform.update_randomization()

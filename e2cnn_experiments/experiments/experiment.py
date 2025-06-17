@@ -1,3 +1,4 @@
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -12,6 +13,7 @@ import datetime
 import plot_exps
 import utils
 import optimizers_L1L2
+import csv ##for saving data
 
 from sklearn.metrics import confusion_matrix
 
@@ -125,7 +127,9 @@ class Experiment:
             config.reshuffle,
             eval_batch_size=config.eval_batch_size,
             interpolation=config.interpolation,
-            limit_samples=getattr(config, "samples", None)  # <== NEW: pass sample limit if exists
+            limit_samples=getattr(config, "samples", None),
+            test_rotation_angle=getattr(config, "test_rotation_angle", None),
+            train_rotation_angle=getattr(config, "train_rotation_angle", None),# <== NEW: pass sample limit if exists
         )
         
         print("datasets built")
@@ -472,6 +476,9 @@ class Experiment:
         self.backup()
         
         self.test()
+        ###########################
+        if hasattr(self, "_dataloaders") and "test" in self._dataloaders:
+            self.evaluate_rotations()
 
     def _lr_scheduler_exponential_decay(self, verbose=False):
         #optimizer, epoch, epoch_start, init_lr, base_factor=.8, lr_decay_epoch=1, verbose=False):
@@ -511,6 +518,87 @@ class Experiment:
         return self._optimizer, lr
 
 
+########################3
+    def evaluate_rotations(self):
+        """
+        Evaluate model accuracy at multiple test set rotations (0, 45, 90, ..., 315 degrees)
+        and print/log results for analysis or plotting.
+        """
+        if self._verbose > 0:
+            print("\nEvaluating model on rotated test sets...")
+
+        #rotation_angles = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100, 105, 110, 115, 120, 125, 130, 135, 140, 145, 150, 155, 160, 165, 170, 175, 180]
+        rotation_angles = [0]
+        results = []
+
+        for angle in rotation_angles:
+            dataloaders, _, _ = utils.build_dataloaders(
+                dataset="mnist12k",
+                batch_size=self.batch_size,
+                num_workers=4,  # or self._dataloaders['test'].num_workers if accessible
+                augment=False,
+                validation=False,
+                interpolation=2,
+                test_rotation_angle=angle
+            )
+            test_loader = dataloaders["test"] 
+
+           
+
+            acc, _ = self.evaluate_custom_loader(test_loader)
+            results.append((angle, acc))
+            print(f"Rotation {angle:>3}°: Test Accuracy = {acc:.2%}")
+ 
+            # Save to CSV
+            csv_path = os.path.join(self.outpath, f"{self.expname}_rot_accuracy.csv")
+            with open(csv_path, mode='w', newline='') as file:
+              writer = csv.writer(file)
+              writer.writerow(["Rotation Angle (deg)", "Test Accuracy"])
+              for angle, acc in results:
+                  writer.writerow([angle, acc])
+
+            print(f"Saved rotation accuracies to: {csv_path}")
+
+        # Optional: plot
+        try:
+            import matplotlib.pyplot as plt
+            angles = [r[0] for r in results]
+            accuracies = [r[1] * 100 for r in results]
+
+            plt.figure(figsize=(8, 5))
+            plt.plot(angles, accuracies, marker='o')
+            plt.xticks(angles)
+            plt.xlabel("Rotation Angle (degrees)")
+            plt.ylabel("Test Accuracy [%]")
+            plt.title("Accuracy vs Rotation")
+            plt.grid(True)
+            if self.plotpath:
+                plt.savefig(self.plotpath.replace(".svg", "_rotcurve.svg"))
+            if self._show:
+                plt.show()
+            plt.close()
+        except ImportError:
+            pass
+
+    def evaluate_custom_loader(self, loader):
+        """ Evaluate a custom dataloader (e.g., rotated test sets) """
+        self.model.eval()
+        cumulative_loss = 0.
+        cumulative_acc = 0
+        n_samples = 0
+        for x, t in loader:
+            x = x.to(self.device)
+            t = t.to(self.device)
+            y = self.model(x)
+
+            n_samples += x.shape[0]
+            cumulative_acc += accuracy(y, t) * x.shape[0]
+            cumulative_loss += self._loss_function(y, t).item() * x.shape[0]
+
+            del x, y, t
+
+        return cumulative_acc / n_samples, cumulative_loss / n_samples
+
 def run_experiment(config):
     exp = Experiment(config)
     exp.run()
@@ -535,3 +623,4 @@ if __name__ == "__main__":
     
     # Train the model
     run_experiment(config)
+

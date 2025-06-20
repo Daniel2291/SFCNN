@@ -18,7 +18,7 @@ tags: [machine learning, reproduction, steerable filters, CNNs, e2cnn,  SFCNN]
 | Name          | Email                            | StudentID | Task                                              |
 |---------------|----------------------------------|-----------|---------------------------------------------------|
 | Daniel Stefanov| dvstefanov@tudelft.nl  | 6171257   | Atomic filters / Hyperparameter test/ Augmentation strategy |
-| Sohail Faizan  |    |    |  |
+| Sohail Faizan  | sohailfaizan@student.tudelft.nl   | 6273866   | ISBI Challenge Recreation |
 
 
 ##  Introduction
@@ -82,6 +82,58 @@ Authors method for presenting SFCNN performance is by evaluating the test error 
 
 - to be written
 
+### ISBI-2012 EM Segmentation Challenge:
+The original paper uses the ISBI-2012 EM Segmentation challenge as a benchmark. It uses a three-stage pipeline that takes a raw image and produces a final instance segmentation. Some changes have been made from the original to simplify package dependencies and required training resources.
+
+#### Architecture:
+
+##### Stage 1: Boundary Prediction with a Steerable U-Net
+The model follows a U-Net-like encoder-decoder architecture (highly effective for biomedical image segmentation).
+SFCNN: Instead of standard convolutions, the network is built from custom SteerableCNNLayer modules. These layers implement the central idea of the reference paper.
+
+##### Stage 2: Superpixel Generation (Watershed Management)
+The raw boundary predictions from the network are used to generate an initial, oversegmented image where the image is divided into many small, regular regions called "superpixels."
+This function implements the Distance Transform Watershed algorithm. The boundary probability map is inverted to create a "foreground" map. The distance_transform_edt function from scikit-image is used to find pixels that are furthest from any predicted boundary. These points act as robust seeds for the center of potential cells. The watershed algorithm from scikit-image is applied, using the seeds to flood the foreground map, creating the final superpixel segmentation.
+
+##### Stage 3: Final Segmentation (Graph-Based Merging)
+Here is the first major deviation from the paper's implementation. From the paper and ref 27 it is inferred that it uses the Nifty package for the Multi-cut function. Unfortunately finding and compiling the package is a big problem.
+Instead the implementation uses  Hierarchical Agglomerative Clustering (merge_hierarchical) from scikit-image. This method is more powerful than a simple cut_threshold because it iteratively merges the weakest links first. However, it is still a "greedy" algorithm and not a true global optimization like Multicut. Thus the performance is expected to be noticibly lower. 
+
+#### Deviations from the paper's architecture:
+
+- The biggest deviation is the bypassing of using the Multicut, which is expected to create a non trivial loss in performance.
+
+- The paper mentions using an "elastic net penalty," which is a combination of L1 and L2 regularization. Implementation uses Weight Decay in the Adam optimizer. This is equivalent to standard L2 regularization.
+
+- The paper mentions the use of elastic deformations, a powerful augmentation technique that applies non-rigid warping to images, making the model more robust to shape variations. The implementation Uses RandomAffine transformations. It is an effective and standard form of augmentation (rotation, scaling, translation) but does not include the more complex elastic deformations.
+
+- The authors likely used a much larger network (more channels (24 vs 16), more orientations, larger kernels) and more epochs.
+
+#### Benchmark:
+The original ISBI-2012 challenge's evaluation set was private. The predictions were sent to the challenge hosts to get results. Since the challenge has been discontibued, the dataset and the algorithm for scoring has been made public. 
+The original script is in Java, and has been converted to python.
+
+#### Results:
+We achieve 
+Average Dice Score:        0.8766
+Average Jaccard Index (IoU): 0.7807
+For our general testing. Comparable numbers are not available for the paper.
+For the FoM of the paper:
+
+| Score Type     | Achieved  | Reference Paper [1] |          |
+|---------------|------------|-------------------------|------|
+| V_rand        | 0.9819     | 0.98792   | (higher is better) |
+| V_info        | 1.0716     | 0.99183   | (lower is better)  |
+
+Detailed results of our model:
+
+| Score Type     | Achieved  |           |
+|---------------|------------|-----------|
+| V_rand        | 0.9819     |  (higher is better) |
+| V_info_split  | 0.2285     |  (lower is better)  |
+| V_info_merge  | 0.8431     |  (lower is better)  |
+
+(V_rand is just 1- Rand error)
 
 ##  Conclusion
 

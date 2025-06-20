@@ -135,6 +135,12 @@ Detailed results of our model:
 
 (V_rand is just 1- Rand error)
 
+<figure style="text-align: center;">
+  <img src="https://raw.githubusercontent.com/Daniel2291/SFCNN/main/images/ISBI_seg.png" alt="Learned steerable filters" height="250">
+  <figcaption><em>Figure 3 </em> Segmentation output in testbench. </figcaption>
+</figure>
+
+
 ##  Conclusion
 
 
